@@ -23,8 +23,9 @@ the values of the mocked metrics in labels like `instance`.
 """
 
 import docopt
-import cherrypy
 import socket
+from urllib.parse import urlparse
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 def port_available(port: int) -> bool:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -33,27 +34,45 @@ def port_available(port: int) -> bool:
     return r != 0
 
 
-class Serve:
-    def __init__(self, file):
-        self.file = file
+def createRequestHandler(file):
+    class RequestHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            path = urlparse(self.path)
+            if path.path == '/':
+                self._index()
+            elif path.path == '/metrics':
+                self._metrics()
 
-    @cherrypy.expose
-    def index(self):
-        return '''
-            <html>
-                <head>
-                    <meta http-equiv="refresh" content="0; URL='/metrics'" />
-                </head>
-                <body>
-                    <p>Redirecting to /metrics!</p>
-                </body>
-            </html>'''
+        def _index(self):
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            self.wfile.write(b'''
+                <html>
+                    <head>
+                        <meta http-equiv="refresh" content="0; URL='/metrics'" />
+                    </head>
+                    <body>
+                        <p>Redirecting to /metrics!</p>
+                    </body>
+                </html>''')
 
-    @cherrypy.expose
-    def metrics(self):
-        cherrypy.response.headers['Content-Type'] = 'text/plain; version=0.0.4; charset=utf-8'
-        with open(self.file) as f:
-            return ''.join(f.readlines())
+        def _metrics(self):
+            with open(file) as f:
+                content = ''.join(f.readlines())
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(content.strip().encode('utf8'))
+
+    return RequestHandler
+
+
+
+def run(host, port, file):
+    httpd = HTTPServer((host, port), createRequestHandler(file))
+    httpd.serve_forever()
+
 
 if __name__ == '__main__':
     args = docopt.docopt(__doc__)
@@ -69,8 +88,5 @@ if __name__ == '__main__':
 
     port = ensure_free_port(port)
 
-    cherrypy.config.update({
-        'server.socket_host': host,
-        'server.socket_port': port,
-    })
-    cherrypy.quickstart(Serve(args['<file>']))
+    run(host, port, args['<file>'])
+
