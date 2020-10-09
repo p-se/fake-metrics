@@ -1,0 +1,40 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: ceph-fake-metrics
+    honor_labels: true
+    static_configs:
+      - targets:
+      {%- for hostname, port in ceph_exporter_targets %}
+          - "localhost:{{port}}"
+      {%- endfor %}
+
+  {% for hostname, port in node_exporter_targets %}
+  - job_name: {{hostname}}
+    static_configs:
+      - targets:
+          - "localhost:{{port}}"
+    relabel_configs:
+      - source_labels: ["job"]
+        target_label: instance
+        replacement: "$1"
+  {% endfor %}
+alerting:
+  alertmanagers:
+    - scheme: http
+      static_configs:
+        - targets:
+            - alertmanager:9093
+            - localhost:9093
+
+rule_files:
+  # - alert_rules.yml
+  - ceph_rules.yml
+  - rewrite_rules.yml
+
+

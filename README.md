@@ -2,6 +2,22 @@
 
 Serves snapshots of Prometheus exporters for debugging purposes.
 
+It can also create Prometheus configuration files with an appropriate template.
+
+---
+**NOTE**
+
+When creating configuration files to be used ensure that serving fake metrics
+receives those files as arguments in the same order as the configuration
+creation command has received. Otherwise the config won't match what is being
+served.
+
+---
+
+## Usage
+
+Please issue `./fake_metrics -h` to see the full usage.
+
 ## Usage Examples
 
 ### Single Snapshot
@@ -35,3 +51,49 @@ server started on port 8895, serving file data/node_exporter-ses6-osd02.txt
 server started on port 8896, serving file data/node_exporter-ses6-osd03.txt
 server started on port 8897, serving file data/node_exporter-ses6-osd04.txt
 ```
+
+## Templates
+
+Fake metrics can create a complete or partial Prometheus configuration file. To do so, a Jinja2
+template must be specified.
+
+```jinja2
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: ceph-fake-metrics
+    honor_labels: true
+    static_configs:
+      - targets:
+      {%- for hostname, port in ceph_exporter_targets %}
+          - "localhost:{{port}}"
+      {%- endfor %}
+
+  {% for hostname, port in node_exporter_targets %}
+  - job_name: {{hostname}}
+    static_configs:
+      - targets:
+          - "localhost:{{port}}"
+    relabel_configs:
+      - source_labels: ["job"]
+        target_label: instance
+        replacement: "$1"
+  {% endfor %}
+alerting:
+  alertmanagers:
+    - scheme: http
+      static_configs:
+        - targets:
+            - alertmanager:9093
+            - localhost:9093
+```
+
+## Future
+
+- Separate configuration file creation from serving fake metrics.
+- The prefix and suffix of filenames that should be discarded to get to the
+  hostname need to be customizable.
+- Maybe enable to start a docker container in network mode host with the created
+  configuration file?
