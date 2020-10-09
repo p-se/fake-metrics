@@ -24,6 +24,14 @@ the values of the mocked metrics in labels like `instance`.
 
 import docopt
 import cherrypy
+import socket
+
+def port_available(port: int) -> bool:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    r = s.connect_ex(('127.0.0.1', port))
+    s.close()
+    return r != 0
+
 
 class Serve:
     def __init__(self, file):
@@ -49,9 +57,20 @@ class Serve:
 
 if __name__ == '__main__':
     args = docopt.docopt(__doc__)
-    print(args)
+    # print(args)
+    host = args['--host']
+    port = int(args['-p'])
+
+    def ensure_free_port(port):
+        if not port_available(port):
+            port += 1
+            ensure_free_port(port)
+        return port
+
+    port = ensure_free_port(port)
+
     cherrypy.config.update({
-        'server.socket_host': args['--host'],
-        'server.socket_port': int(args['-p']),
+        'server.socket_host': host,
+        'server.socket_port': port,
     })
     cherrypy.quickstart(Serve(args['<file>']))
