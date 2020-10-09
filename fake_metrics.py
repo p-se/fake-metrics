@@ -4,7 +4,7 @@
 Fake Metrics - Fake Prometheus metrics for debugging
 
 Usage:
-    fake_metrics <file> [-p=<port>] [--host=<host>]
+    fake_metrics <file>... [-p=<port>] [--host=<host>]
     fake_metrics -h|--help
 
 Options:
@@ -24,6 +24,7 @@ the values of the mocked metrics in labels like `instance`.
 
 import docopt
 import socket
+from threading import Thread
 from urllib.parse import urlparse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -70,6 +71,7 @@ def createRequestHandler(file):
 
 
 def run(host, port, file):
+    print('server started on port {}'.format(port))
     httpd = HTTPServer((host, port), createRequestHandler(file))
     httpd.serve_forever()
 
@@ -88,5 +90,9 @@ if __name__ == '__main__':
 
     port = ensure_free_port(port)
 
-    run(host, port, args['<file>'])
+    for file in args['<file>']:
+        t = Thread(target=run, args=(host, port, file))
+        t.start()
+        port += 1
+
 
