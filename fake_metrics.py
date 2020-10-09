@@ -71,7 +71,7 @@ def createRequestHandler(file):
 
 
 def run(host, port, file):
-    print('server started on port {}'.format(port))
+    print('server started on port {}, serving file {}'.format(port, file))
     httpd = HTTPServer((host, port), createRequestHandler(file))
     httpd.serve_forever()
 
