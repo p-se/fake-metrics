@@ -4,16 +4,6 @@ Serves snapshots of Prometheus exporters for debugging purposes.
 
 It can also create Prometheus configuration files with an appropriate template.
 
----
-**NOTE**
-
-When creating configuration files to be used ensure that serving fake metrics
-receives those files as arguments in the same order as the configuration
-creation command has received. Otherwise the config won't match what is being
-served.
-
----
-
 ## Usage
 
 Please issue `./fake_metrics -h` to see the full usage.
@@ -23,23 +13,24 @@ Please issue `./fake_metrics -h` to see the full usage.
 ### Single Snapshot
 
 ```bash
-./fake_metrics.py <file>
+./fake_metrics.py static <txt_file>
+./fake_metrics.py template <jinja_file>
 ```
 
 ### Multiple Snapshots
 
 Fake metrics can open multiple ports to serve data. If more than one file is
 passed to it, it will take the default port and increase it by one for each
-consecutive file.
+consecutive file. Currently multiple snapshots only support static files.
 
 ```bash
-./fake_metrics.py data/*
+./fake_metrics.py static data/*
 ```
 
 The server tells you which ports are being used for which provided files.
 
 ```bash
-$ ./fake_metrics.py data/*
+$ ./fake_metrics.py static data/*
 server started on port 8888, serving file data/ceph_mgr_exporter-ses6-mon1.txt
 server started on port 8889, serving file data/ceph_mgr_exporter-ses6-mon2.txt
 server started on port 8890, serving file data/ceph_mgr_exporter-ses6-mon3.txt
@@ -52,7 +43,7 @@ server started on port 8896, serving file data/node_exporter-ses6-osd03.txt
 server started on port 8897, serving file data/node_exporter-ses6-osd04.txt
 ```
 
-## Templates
+## Prometheus Configuration
 
 Fake metrics can create a complete or partial Prometheus configuration file. To do so, a Jinja2
 template must be specified.

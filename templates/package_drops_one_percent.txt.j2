@@ -1,0 +1,25 @@
+{% set devices=['lo', 'enp4s0', 'docker0', 'virbr1', 'wlp8s0'] -%}
+
+# HELP node_network_receive_drop_total Network device statistic receive_drop.
+# TYPE node_network_receive_drop_total counter
+{% for device in devices -%}
+node_network_receive_drop_total{device="{{device}}"} {{increase('received_drop_' + device)}}
+{% endfor -%}
+
+# HELP node_network_transmit_drop_total Network device statistic transmit_drop.
+# TYPE node_network_transmit_drop_total counter
+{% for device in devices -%}
+node_network_transmit_drop_total{device="{{device}}"} {{increase('transmit_drop_' + device)}}
+{% endfor -%}
+
+# HELP node_network_receive_packets_total Network device statistic receive_packets.
+# TYPE node_network_receive_packets_total counter
+{% for device in devices -%}
+node_network_receive_packets_total{device="{{device}}"} {{increase('receive_packets_total_' + device, 100)}}
+{% endfor -%}
+
+# HELP node_network_transmit_packets_total Network device statistic transmit_packets.
+# TYPE node_network_transmit_packets_total counter
+{% for device in devices -%}
+node_network_transmit_packets_total{device="{{device}}"} {{increase('transmit_packets_total_' + device, 100)}}
+{% endfor -%}
