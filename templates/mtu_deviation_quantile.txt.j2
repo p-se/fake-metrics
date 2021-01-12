@@ -1,0 +1,13 @@
+# HELP node_network_mtu_bytes mtu_bytes value of /sys/class/net/<iface>.
+# TYPE node_network_mtu_bytes gauge
+{%-
+set data = [
+    ('a', 1500),
+    ('b', 1500),
+    ('c', 9000),
+    ('d', 9000),
+]
+%}
+{%- for device, value in data %}
+node_network_mtu_bytes{device="{{device}}"} {{value}}
+{%- endfor %}
