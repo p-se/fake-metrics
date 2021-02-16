@@ -8,6 +8,16 @@ It can also create Prometheus configuration files with an appropriate template.
 
 Please issue `./fake_metrics -h` to see the full usage.
 
+## Usage Notes
+
+Note that every request to the fake metrics server may increase a counter. By
+requesting the data from a browser while Prometheus is scraping them
+simultaneously, you may cause unwanted changes in your metrics.
+
+On the other hand, you can deliberately exploit this fact if you want to
+cause an ad hoc change in the metrics. When time passes by, the metrics
+should return to the configured behavior.
+
 ## Usage Examples
 
 ### Single Snapshot
