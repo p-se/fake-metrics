@@ -1,0 +1,15 @@
+# HELP ceph_pool_max_avail DF pool max_avail
+# TYPE ceph_pool_max_avail gauge
+ceph_pool_max_avail{pool_id="1"} 106289455104.0
+ceph_pool_max_avail{pool_id="2"} 106289455104.0
+ceph_pool_max_avail{pool_id="3"} 106289455104.0
+# HELP ceph_pool_stored DF pool stored
+# TYPE ceph_pool_stored gauge
+ceph_pool_stored{pool_id="1"} 0.0
+ceph_pool_stored{pool_id="2"} 4553.0
+ceph_pool_stored{pool_id="3"} 0.0
+# HELP ceph_pool_stored_raw DF pool stored_raw
+# TYPE ceph_pool_stored_raw gauge
+ceph_pool_stored_raw{pool_id="1"} 0.0
+ceph_pool_stored_raw{pool_id="2"} 13659.0
+ceph_pool_stored_raw{pool_id="3"} 0.0
