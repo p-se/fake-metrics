@@ -98,3 +98,20 @@ alerting:
   hostname need to be customizable.
 - Maybe enable to start a docker container in network mode host with the created
   configuration file?
+
+## Alternatives
+
+Alternatively, the Node-Exporter could be used to server a text file using the
+`textfiles` collector. It is even possible to disable all other data exporter
+by the Node-Exporter by default using the `--collector.disable-defaults`
+switch. The data exporter would not need to be static if the file(s) is/are
+updated.
+
+```sh
+prometheus-node-exporter \
+    --collector.disable-defaults \
+    --collector.textfile  \
+    --collector.textfile.directory=/exports
+```
+
+Note: All `*.prom` files in the specified directory will be parsed, no more.
