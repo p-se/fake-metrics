@@ -2,7 +2,8 @@
 
 Serves snapshots of Prometheus exporters for debugging purposes.
 
-It can also create Prometheus configuration files with an appropriate template.
+It can also create Prometheus configuration files with an appropriate template
+to comfortably scrape all the exporters started by fake metrics.
 
 ## Usage
 
@@ -25,6 +26,7 @@ should return to the configured behavior.
 ```bash
 ./fake_metrics.py static <txt_file>
 ./fake_metrics.py template <jinja_file>
+./fake_metrics.py replay <json_file>
 ```
 
 ### Multiple Snapshots
@@ -55,41 +57,13 @@ server started on port 8897, serving file data/node_exporter-ses6-osd04.txt
 
 ## Prometheus Configuration
 
-Fake metrics can create a complete or partial Prometheus configuration file. To do so, a Jinja2
-template must be specified.
+Fake metrics can create a complete or partial Prometheus configuration file. To
+do so, a Jinja2 template must be specified using the `--template` switch.
 
-```jinja2
-scrape_configs:
-  - job_name: prometheus
-    static_configs:
-      - targets: ["localhost:9090"]
+This is currently only implemented for serving static files and its becoming
+particularly useful when serving several of them.
 
-  - job_name: ceph-fake-metrics
-    honor_labels: true
-    static_configs:
-      - targets:
-      {%- for hostname, port in ceph_exporter_targets %}
-          - "localhost:{{port}}"
-      {%- endfor %}
-
-  {% for hostname, port in node_exporter_targets %}
-  - job_name: {{hostname}}
-    static_configs:
-      - targets:
-          - "localhost:{{port}}"
-    relabel_configs:
-      - source_labels: ["job"]
-        target_label: instance
-        replacement: "$1"
-  {% endfor %}
-alerting:
-  alertmanagers:
-    - scheme: http
-      static_configs:
-        - targets:
-            - alertmanager:9093
-            - localhost:9093
-```
+See `prometheus.yml.j2` for an example template file.
 
 ## Future
 
@@ -101,11 +75,10 @@ alerting:
 
 ## Alternatives
 
-Alternatively, the Node-Exporter could be used to server a text file using the
-`textfiles` collector. It is even possible to disable all other data exporter
-by the Node-Exporter by default using the `--collector.disable-defaults`
-switch. The data exporter would not need to be static if the file(s) is/are
-updated.
+Alternatively, the Node-Exporter could be used to serve a text file using the
+`textfiles` collector. It is even possible to disable all other data exporter of
+the Node-Exporter by using the `--collector.disable-defaults` switch. The data
+exporter would not need to be static if the file(s) is/are updated externally.
 
 ```sh
 prometheus-node-exporter \
