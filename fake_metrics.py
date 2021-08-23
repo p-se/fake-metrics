@@ -7,6 +7,14 @@ Usage:
     fake_metrics template <file> [-p=<port>] [--host=<host>]
     fake_metrics -h|--help
 
+Commands:
+
+    static                Use a static file from one exporter to constantly
+                          export the same statistics.
+
+    template              Use a Jinja template to dynamically adapt the provided
+                          metrics.
+
 Options:
     -h --help             Show this screen.
     -p=<port>             The port to listen on [Default: 8888].
@@ -21,7 +29,8 @@ Default ports:
 Other hints:
 
 Note that `honor_labels` should be set to true to preserve the values of the
-mocked metrics in labels like `instance`.
+mocked metrics in labels like `instance`, which are added by Prometheus when
+data is scraped.
 """
 
 import docopt
@@ -160,45 +169,49 @@ def write_config_by_template(
                 node_exporter_targets=node_exporter_targets,
             ))
 
+def serve_static():
+    host = args["--host"]
+    port = int(args["-p"])
+    template = args["--template"]
+    config = args["--config"]
+    files = args["<file>"]
+
+    def ensure_free_port(port):
+        if not port_available(port):
+            port += 1
+            ensure_free_port(port)
+        return port
+
+    port = ensure_free_port(port)  # starting port
+
+    if template and config:
+        write_config_by_template(template, config, port, files)
+
+    for file in args["<file>"]:
+        t = Thread(target=run_file, args=(host, port, file))
+        t.start()
+        port += 1
+
+def serve_template():
+    host = args["--host"]
+    port = int(args["-p"])
+    file = args["<file>"][0]
+
+    env = Environment(autoescape=False)  # FIXME unused?
+    with open(file, "r") as fh:
+        template = Template(fh.read())
+        template.environment.globals.update(
+            chance=chance,
+            increase=increase,
+            reset=reset,
+            increase_or_reset=increase_or_reset,
+        )
+    run_template(host, port, template)
+
 
 if __name__ == "__main__":
     args = docopt.docopt(__doc__)
-
     if args["static"]:
-        host = args["--host"]
-        port = int(args["-p"])
-        template = args["--template"]
-        config = args["--config"]
-        files = args["<file>"]
-
-        def ensure_free_port(port):
-            if not port_available(port):
-                port += 1
-                ensure_free_port(port)
-            return port
-
-        port = ensure_free_port(port)  # starting port
-
-        if template and config:
-            write_config_by_template(template, config, port, files)
-
-        for file in args["<file>"]:
-            t = Thread(target=run_file, args=(host, port, file))
-            t.start()
-            port += 1
-
+        serve_static()
     elif args["template"]:
-        host = args["--host"]
-        port = int(args["-p"])
-        file = args["<file>"][0]
-
-        env = Environment(autoescape=False)
-        with open(file, "r") as fh:
-            template = Template(fh.read())
-            template.environment.globals.update(
-                chance=chance,
-                increase=increase,
-                reset=reset,
-                increase_or_reset=increase_or_reset,
-            )
-        run_template(host, port, template)
+        serve_template()
