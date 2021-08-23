@@ -5,6 +5,7 @@ Fake Metrics - Fake Prometheus metrics for debugging
 Usage:
     fake_metrics static <file>... [-p=<port>] [--host=<host>] [--template=<template> --config=<config>]
     fake_metrics template <file> [-p=<port>] [--host=<host>]
+    fake_metrics replay <file> [-p=<port>] [--host=<host>]
     fake_metrics -h|--help
 
 Commands:
@@ -14,6 +15,8 @@ Commands:
 
     template              Use a Jinja template to dynamically adapt the provided
                           metrics.
+
+    replay                Replay an export of Prometheus API data.
 
 Options:
     -h --help             Show this screen.
@@ -33,17 +36,28 @@ mocked metrics in labels like `instance`, which are added by Prometheus when
 data is scraped.
 """
 
-import docopt
+from json.decoder import JSONDecodeError
 import socket
 import re
 import os
+import json
+import sys
 from threading import Thread
+from tools import build_metric
 from urllib.parse import urlparse
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import List, Tuple, Optional
+from http.server import HTTPServer, BaseHTTPRequestHandler, SimpleHTTPRequestHandler
+from typing import List, Tuple, Optional, Dict, Any
+from collections import defaultdict
+
+import docopt
 from jinja2 import Template, Environment
 
 from template_tools import increase, increase_or_reset, reset, chance
+
+
+def fail(msg: str) -> None:
+    print(msg, file=sys.stderr)
+    sys.exit(1)
 
 
 def port_available(port: int) -> bool:
@@ -53,8 +67,20 @@ def port_available(port: int) -> bool:
     return r != 0
 
 
-def createRequestHandler(file: Optional[str] = None, template: Optional[Template] = None):
-    assert file or template
+def createRequestHandler(
+    file: Optional[str] = None,
+    template: Optional[Template] = None,
+    sequence: Optional[Dict[str, List[str]]] = None,
+):
+    """
+    Serves the given file (static), template (after evaluation) or sequence.
+
+    Sequence is special in that the metric names are assigned multiple values,
+    which are returned on each request sequentially and removed from the
+    sequence. The last value is served forever.  This enables to replay
+    previously exported metrics.
+    """
+    assert file or template or sequence
 
     class RequestHandler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -84,8 +110,16 @@ def createRequestHandler(file: Optional[str] = None, template: Optional[Template
                     content = f.read()
             elif template:
                 content = template.render()
+            elif sequence:
+                content = ''
+                for metric, values in sequence.items():
+                    if len(values) > 1:
+                        content += f'{metric} {values.pop(0)}\n'
+                    else:
+                        content += f'{metric} {values[0]}\n'  # serve last value forever
             else:
                 raise Exception("no content provided to serve")
+
             self.send_response(200)
             self.send_header("Content-Type", "text/plain")
             self.end_headers()
@@ -103,6 +137,12 @@ def run_file(host: str, port: int, file: str):
 def run_template(host: str, port: int, template: Template):
     print("server started on port {}, serving content".format(port))
     httpd = HTTPServer((host, port), createRequestHandler(template=template))
+    httpd.serve_forever()
+
+
+def run_replay(host: str, port: int, sequence: Dict[str, List[Any]]):
+    print("server started on port {}, serving replay".format(port))
+    httpd = HTTPServer((host, port), createRequestHandler(sequence=sequence))
     httpd.serve_forever()
 
 
@@ -208,6 +248,32 @@ def serve_template():
         )
     run_template(host, port, template)
 
+def serve_replay():
+    host = args["--host"]
+    port = int(args["-p"])
+    try:
+        with open(args['<file>'][0]) as fh:
+            data = json.loads(fh.read())
+
+        if data['status'] != 'success':
+            fail('Export did not succeed')
+
+        if data['data']['resultType'] == 'matrix':
+            sequence = defaultdict(list)
+            for d in data['data']['result']:
+                metric: Dict[str, str] = d['metric']
+                values: List[Tuple[int, float]] = d['values']
+                just_values = [v for _, v in values]
+                sequence[build_metric(metric)] = just_values
+
+            run_replay(host, port, sequence)
+        else:
+            fail('Unsupported result type: %s' % data['data']['resultType'])
+    except IOError as ioe:
+        fail('File could not be opened: %s' % ioe)
+    except JSONDecodeError as jde:
+        fail('File does not contain valid JSON: %s' % jde)
+
 
 if __name__ == "__main__":
     args = docopt.docopt(__doc__)
@@ -215,3 +281,5 @@ if __name__ == "__main__":
         serve_static()
     elif args["template"]:
         serve_template()
+    elif args["replay"]:
+        serve_replay()
