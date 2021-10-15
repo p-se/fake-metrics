@@ -5,6 +5,7 @@ Fake Metrics - Fake Prometheus metrics for debugging
 Usage:
     fake_metrics static <file>... [-p=<port>] [--host=<host>] [--template=<template> --config=<config>]
     fake_metrics template <file> [-p=<port>] [--host=<host>]
+    fake_metrics import <file> [-p=<port>] [--host=<host>]
     fake_metrics replay <file> [-p=<port>] [--host=<host>]
     fake_metrics -h|--help
 
@@ -45,7 +46,7 @@ import sys
 from threading import Thread
 from tools import build_metric
 from urllib.parse import urlparse
-from http.server import HTTPServer, BaseHTTPRequestHandler, SimpleHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import List, Tuple, Optional, Dict, Any
 from collections import defaultdict
 
@@ -70,6 +71,7 @@ def port_available(port: int) -> bool:
 def createRequestHandler(
     file: Optional[str] = None,
     template: Optional[Template] = None,
+    json: Optional[Dict[str, List[str]]] = None,
     sequence: Optional[Dict[str, List[str]]] = None,
 ):
     """
@@ -80,7 +82,7 @@ def createRequestHandler(
     sequence. The last value is served forever.  This enables to replay
     previously exported metrics.
     """
-    assert file or template or sequence
+    assert file or template or json or sequence
 
     class RequestHandler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -110,6 +112,20 @@ def createRequestHandler(
                     content = f.read()
             elif template:
                 content = template.render()
+            elif json:
+                content = ''
+                for values in json['data']['result']:
+                    metric = values['metric'].copy()
+                    name = metric['__name__']
+                    del metric['__name__']
+                    content += '{name}{{{labels}}} {value}\n'.format(
+                        name=name,
+                        labels=', '.join([
+                            '{}="{}"'.format(key, value)
+                            for key, value in metric.items()]
+                        ),
+                        value=float(values['value'][1]),
+                    )
             elif sequence:
                 content = ''
                 for metric, values in sequence.items():
@@ -140,6 +156,12 @@ def run_template(host: str, port: int, template: Template):
     httpd.serve_forever()
 
 
+def run_import(host: str, port: int, content: Dict[str, List[Any]]):
+    print("server started on  port {}, serving content".format(port))
+    httpd = HTTPServer((host, port), createRequestHandler(json=content))
+    httpd.serve_forever()
+
+
 def run_replay(host: str, port: int, sequence: Dict[str, List[Any]]):
     print("server started on port {}, serving replay".format(port))
     httpd = HTTPServer((host, port), createRequestHandler(sequence=sequence))
@@ -147,6 +169,12 @@ def run_replay(host: str, port: int, sequence: Dict[str, List[Any]]):
 
 
 def any_in(search_keys: List[str], haystack: str) -> bool:
+    """
+    >>> any_in(['foo', 'bar'], 'a b bar c')
+    True
+    >>> any_in(list('ab'), 'cde')
+    False
+    """
     for key in search_keys:
         if key in haystack:
             return True
@@ -209,18 +237,19 @@ def write_config_by_template(
                 node_exporter_targets=node_exporter_targets,
             ))
 
+def ensure_free_port(port: int) -> int:
+    if not port_available(port):
+        port += 1
+        ensure_free_port(port)
+    return port
+
+
 def serve_static():
     host = args["--host"]
     port = int(args["-p"])
     template = args["--template"]
     config = args["--config"]
     files = args["<file>"]
-
-    def ensure_free_port(port):
-        if not port_available(port):
-            port += 1
-            ensure_free_port(port)
-        return port
 
     port = ensure_free_port(port)  # starting port
 
@@ -275,11 +304,36 @@ def serve_replay():
         fail('File does not contain valid JSON: %s' % jde)
 
 
+def serve_import():
+    host = args["--host"]
+    port = int(args["-p"])
+    try:
+        data = {}
+        for file in args['<file>']:
+            with open(file) as fh:
+                data[file] = json.loads(fh.read())
+
+            if data[file]['status'] != 'success':
+                fail('Export of file %s failed' % file)
+
+            if data[file]['data']['resultType'] != 'vector':
+                fail('Unsupported result type: %s' % data['data']['resultType'])
+
+            port = ensure_free_port(port)
+            run_import(host, port, data[file])
+    except IOError as ioe:
+        fail('File could not be opened: %s' % ioe)
+    except JSONDecodeError as jde:
+        fail('File does not contain valid JSON: %s' % jde)
+
+
 if __name__ == "__main__":
     args = docopt.docopt(__doc__)
     if args["static"]:
         serve_static()
     elif args["template"]:
         serve_template()
+    elif args["import"]:
+        serve_import()
     elif args["replay"]:
         serve_replay()

@@ -26,8 +26,29 @@ should return to the configured behavior.
 ```bash
 ./fake_metrics.py static <txt_file>
 ./fake_metrics.py template <jinja_file>
+./fake_metrics.py import <json_file>
 ./fake_metrics.py replay <json_file>
 ```
+
+#### Static file
+
+The static file is provided on the `/metrics` endpoint as is.
+
+#### Jinja file
+
+The jinja template file is evaluated and then provided as the `/metrics`
+endpoint. Note that there a few functions to use for your convenience. For more
+information, please refer to `template_tools.py`.
+
+#### Import
+
+The import functionality enables to import an instant vector and provide data
+from that as metrics.
+
+#### Replay
+
+The replay functionality enables to replay range vectors exported by the
+Prometheus API.
 
 ### Multiple Snapshots
 
