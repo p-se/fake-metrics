@@ -5,19 +5,30 @@ Fake Metrics - Fake Prometheus metrics for debugging
 Usage:
     fake_metrics static <file>... [-p=<port>] [--host=<host>] [--template=<template> --config=<config>]
     fake_metrics template <file> [-p=<port>] [--host=<host>]
-    fake_metrics import <file> [-p=<port>] [--host=<host>]
+    fake_metrics import <file>... [-p=<port>] [--host=<host>]
     fake_metrics replay <file> [-p=<port>] [--host=<host>]
     fake_metrics -h|--help
 
 Commands:
 
-    static                Use a static file from one exporter to constantly
-                          export the same statistics.
+    static                
 
-    template              Use a Jinja template to dynamically adapt the provided
-                          metrics.
+    Use a static file from one exporter to constantly export the same
+    statistics.
 
-    replay                Replay an export of Prometheus API data.
+    template              
+    
+    Use a Jinja template to dynamically adapt the provided metrics.
+
+    import                
+    
+    Use the JSON data of a Prometheus exporter to serve just this data.
+
+    replay                
+    
+    Replay an export of Prometheus API data. Every time a request is made to an
+    exporter started by Fake Metrics, the next value of the provided range
+    vector is returned.
 
 Options:
     -h --help             Show this screen.
@@ -71,7 +82,7 @@ def port_available(port: int) -> bool:
 def createRequestHandler(
     file: Optional[str] = None,
     template: Optional[Template] = None,
-    json: Optional[Dict[str, List[str]]] = None,
+    json: Optional[Dict[str, Any]] = None,
     sequence: Optional[Dict[str, List[str]]] = None,
 ):
     """
@@ -120,7 +131,7 @@ def createRequestHandler(
                     del metric['__name__']
                     content += '{name}{{{labels}}} {value}\n'.format(
                         name=name,
-                        labels=', '.join([
+                        labels=','.join([
                             '{}="{}"'.format(key, value)
                             for key, value in metric.items()]
                         ),
@@ -309,6 +320,8 @@ def serve_import():
     port = int(args["-p"])
     try:
         data = {}
+        port = ensure_free_port(port)
+        threads: List[Thread] = []
         for file in args['<file>']:
             with open(file) as fh:
                 data[file] = json.loads(fh.read())
@@ -319,8 +332,16 @@ def serve_import():
             if data[file]['data']['resultType'] != 'vector':
                 fail('Unsupported result type: %s' % data['data']['resultType'])
 
-            port = ensure_free_port(port)
-            run_import(host, port, data[file])
+            t = Thread(target=run_import, args=(host, port, data[file]))
+            t.start()
+            threads.append(t)
+
+            port += 1
+
+        for thread in threads:
+            thread.join()
+        
+
     except IOError as ioe:
         fail('File could not be opened: %s' % ioe)
     except JSONDecodeError as jde:
