@@ -107,7 +107,8 @@ def createRequestHandler(
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.end_headers()
-            self.wfile.write(b"""
+            self.wfile.write(
+                b"""
                 <html>
                     <head>
                         <meta http-equiv="refresh" content="0; URL='/metrics'" />
@@ -115,7 +116,8 @@ def createRequestHandler(
                     <body>
                         <p>Redirecting to /metrics!</p>
                     </body>
-                </html>""")
+                </html>"""
+            )
 
         def _metrics(self):
             if file:
@@ -124,26 +126,28 @@ def createRequestHandler(
             elif template:
                 content = template.render()
             elif json:
-                content = ''
-                for values in json['data']['result']:
-                    metric = values['metric'].copy()
-                    name = metric['__name__']
-                    del metric['__name__']
-                    content += '{name}{{{labels}}} {value}\n'.format(
+                content = ""
+                for values in json["data"]["result"]:
+                    metric = values["metric"].copy()
+                    name = metric["__name__"]
+                    del metric["__name__"]
+                    content += "{name}{{{labels}}} {value}\n".format(
                         name=name,
-                        labels=','.join([
-                            '{}="{}"'.format(key, value)
-                            for key, value in metric.items()]
+                        labels=",".join(
+                            [
+                                '{}="{}"'.format(key, value)
+                                for key, value in metric.items()
+                            ]
                         ),
-                        value=float(values['value'][1]),
+                        value=float(values["value"][1]),
                     )
             elif sequence:
-                content = ''
+                content = ""
                 for metric, values in sequence.items():
                     if len(values) > 1:
-                        content += f'{metric} {values.pop(0)}\n'
+                        content += f"{metric} {values.pop(0)}\n"
                     else:
-                        content += f'{metric} {values[0]}\n'  # serve last value forever
+                        content += f"{metric} {values[0]}\n"  # serve last value forever
             else:
                 raise Exception("no content provided to serve")
 
@@ -209,6 +213,7 @@ def write_config_by_template(
     Prometheus, so that the resulting Prometheus configuration file is aware of
     any exporters created by this script.
     """
+
     def clean_str(prefix: str, suffix: str, string: str) -> str:
         string = re.sub(r"^{}".format(prefix), "", string)
         string = re.sub(r"{}$".format(suffix), "", string)
@@ -217,11 +222,13 @@ def write_config_by_template(
     files = [os.path.basename(f) for f in files]
 
     ceph_exporter_hostnames = [
-        clean_str(prometheus_exporter_file_prefix, ignore_suffix, f) for f in files
+        clean_str(prometheus_exporter_file_prefix, ignore_suffix, f)
+        for f in files
         if f.startswith(prometheus_exporter_file_prefix)
     ]
     node_exporter_hostnames = [
-        clean_str(node_exporter_file_prefix, ignore_suffix, f) for f in files
+        clean_str(node_exporter_file_prefix, ignore_suffix, f)
+        for f in files
         if f.startswith(node_exporter_file_prefix)
     ]
 
@@ -246,7 +253,9 @@ def write_config_by_template(
             template.render(
                 ceph_exporter_targets=ceph_exporter_targets,
                 node_exporter_targets=node_exporter_targets,
-            ))
+            )
+        )
+
 
 def ensure_free_port(port: int) -> int:
     if not port_available(port):
@@ -272,6 +281,7 @@ def serve_static():
         t.start()
         port += 1
 
+
 def serve_template():
     host = args["--host"]
     port = int(args["-p"])
@@ -288,31 +298,32 @@ def serve_template():
         )
     run_template(host, port, template)
 
+
 def serve_replay():
     host = args["--host"]
     port = int(args["-p"])
     try:
-        with open(args['<file>'][0]) as fh:
+        with open(args["<file>"][0]) as fh:
             data = json.loads(fh.read())
 
-        if data['status'] != 'success':
-            fail('Export did not succeed')
+        if data["status"] != "success":
+            fail("Export did not succeed")
 
-        if data['data']['resultType'] == 'matrix':
+        if data["data"]["resultType"] == "matrix":
             sequence = defaultdict(list)
-            for d in data['data']['result']:
-                metric: Dict[str, str] = d['metric']
-                values: List[Tuple[int, float]] = d['values']
+            for d in data["data"]["result"]:
+                metric: Dict[str, str] = d["metric"]
+                values: List[Tuple[int, float]] = d["values"]
                 just_values = [v for _, v in values]
                 sequence[build_metric(metric)] = just_values
 
             run_replay(host, port, sequence)
         else:
-            fail('Unsupported result type: %s' % data['data']['resultType'])
+            fail("Unsupported result type: %s" % data["data"]["resultType"])
     except IOError as ioe:
-        fail('File could not be opened: %s' % ioe)
+        fail("File could not be opened: %s" % ioe)
     except JSONDecodeError as jde:
-        fail('File does not contain valid JSON: %s' % jde)
+        fail("File does not contain valid JSON: %s" % jde)
 
 
 def serve_import():
@@ -322,15 +333,15 @@ def serve_import():
         data = {}
         port = ensure_free_port(port)
         threads: List[Thread] = []
-        for file in args['<file>']:
+        for file in args["<file>"]:
             with open(file) as fh:
                 data[file] = json.loads(fh.read())
 
-            if data[file]['status'] != 'success':
-                fail('Export of file %s failed' % file)
+            if data[file]["status"] != "success":
+                fail("Export of file %s failed" % file)
 
-            if data[file]['data']['resultType'] != 'vector':
-                fail('Unsupported result type: %s' % data['data']['resultType'])
+            if data[file]["data"]["resultType"] != "vector":
+                fail("Unsupported result type: %s" % data["data"]["resultType"])
 
             t = Thread(target=run_import, args=(host, port, data[file]))
             t.start()
@@ -340,12 +351,11 @@ def serve_import():
 
         for thread in threads:
             thread.join()
-        
 
     except IOError as ioe:
-        fail('File could not be opened: %s' % ioe)
+        fail("File could not be opened: %s" % ioe)
     except JSONDecodeError as jde:
-        fail('File does not contain valid JSON: %s' % jde)
+        fail("File does not contain valid JSON: %s" % jde)
 
 
 if __name__ == "__main__":
